@@ -190,38 +190,43 @@ func (r *RingBuffer) TryRead(p []byte) (n int, err error) {
 }
 
 func (r *RingBuffer) read(p []byte) (n int, err error) {
+	// 如果读写指针相等且缓冲区不满，说明缓冲区为空
 	if r.w == r.r && !r.isFull {
 		return 0, ErrIsEmpty
 	}
 
+	// 情况1: 写指针在读指针后面 (正常序列)
 	if r.w > r.r {
-		n = r.w - r.r
+		n = r.w - r.r // 可读取的字节数
 		if n > len(p) {
-			n = len(p)
+			n = len(p) // 确保不超过目标切片容量
 		}
-		copy(p, r.buf[r.r:r.r+n])
-		r.r = (r.r + n) % r.size
+		copy(p, r.buf[r.r:r.r+n]) // 复制数据到目标切片
+		r.r = (r.r + n) % r.size  // 更新读指针位置
 		return
 	}
 
-	n = r.size - r.r + r.w
+	// 情况2: 写指针在读指针前面 (环绕序列)
+	n = r.size - r.r + r.w // 计算可读取的总字节数
 	if n > len(p) {
-		n = len(p)
+		n = len(p) // 确保不超过目标切片容量
 	}
 
+	// 如果读取的数据未跨越缓冲区末尾
 	if r.r+n <= r.size {
 		copy(p, r.buf[r.r:r.r+n])
 	} else {
-		c1 := r.size - r.r
-		copy(p, r.buf[r.r:r.size])
-		c2 := n - c1
-		copy(p[c1:], r.buf[0:c2])
+		// 如果读取的数据跨越了缓冲区末尾
+		c1 := r.size - r.r         // 尾部可读取的字节数
+		copy(p, r.buf[r.r:r.size]) // 复制尾部数据
+		c2 := n - c1               // 头部需要读取的字节数
+		copy(p[c1:], r.buf[0:c2])  // 复制头部数据
 	}
-	r.r = (r.r + n) % r.size
+	r.r = (r.r + n) % r.size // 更新读指针位置
 
-	r.isFull = false
+	r.isFull = false // 读取后缓冲区一定不满
 
-	return n, r.readErr(true)
+	return n, r.readErr(true) // 返回读取的字节数和可能的错误
 }
 
 // ReadByte reads and returns the next byte from the input or ErrIsEmpty.

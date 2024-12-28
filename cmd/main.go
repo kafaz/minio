@@ -99,36 +99,38 @@ VERSION:
 `
 
 func newApp(name string) *cli.App {
-	// Collection of minio commands currently supported are.
+	// 创建一个空的命令集合，用于存储当前支持的 MinIO 命令。
 	commands := []cli.Command{}
 
-	// Collection of minio commands currently supported in a trie tree.
+	// 创建一个 Trie 树，用于存储当前支持的 MinIO 命令。
 	commandsTree := trie.NewTrie()
 
-	// registerCommand registers a cli command.
+	// 定义一个函数用于注册 CLI 命令。
 	registerCommand := func(command cli.Command) {
-		// avoid registering commands which are not being built (via
-		// go:build tags)
+		// 避免注册未构建的命令（通过 go:build 标签）。
 		if command.Name == "" {
 			return
 		}
+		// 将命令添加到命令集合中。
 		commands = append(commands, command)
+		// 将命令名称插入到 Trie 树中。
 		commandsTree.Insert(command.Name)
 	}
 
+	// 定义一个函数用于查找最接近的命令。
 	findClosestCommands := func(command string) []string {
 		var closestCommands []string
+		// 通过前缀匹配查找命令。
 		closestCommands = append(closestCommands, commandsTree.PrefixMatch(command)...)
 
+		// 对找到的命令进行排序。
 		sort.Strings(closestCommands)
-		// Suggest other close commands - allow missed, wrongly added and
-		// even transposed characters
+		// 建议其他接近的命令，允许错过、错误添加和字符调换。
 		for _, value := range commandsTree.Walk(commandsTree.Root()) {
 			if sort.SearchStrings(closestCommands, value) < len(closestCommands) {
 				continue
 			}
-			// 2 is arbitrary and represents the max
-			// allowed number of typed errors
+			// 2 是一个任意值，表示允许的最大输入错误数。
 			if words.DamerauLevenshteinDistance(command, value) < 2 {
 				closestCommands = append(closestCommands, value)
 			}
@@ -137,17 +139,18 @@ func newApp(name string) *cli.App {
 		return closestCommands
 	}
 
-	// Register all commands.
+	// 注册所有命令。
 	registerCommand(serverCmd)
 	registerCommand(fmtGenCmd)
 
-	// Set up app.
+	// 设置应用程序。
 	cli.HelpFlag = cli.BoolFlag{
 		Name:  "help, h",
 		Usage: "show help",
 	}
 	cli.VersionPrinter = printMinIOVersion
 
+	// 创建一个新的 CLI 应用程序。
 	app := cli.NewApp()
 	app.Name = name
 	app.Author = "MinIO, Inc."
@@ -155,7 +158,7 @@ func newApp(name string) *cli.App {
 	app.Usage = "High Performance Object Storage"
 	app.Description = `Build high performance data infrastructure for machine learning, analytics and application data workloads with MinIO`
 	app.Flags = GlobalFlags
-	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
+	app.HideHelpCommand = true // 隐藏 `help, h` 命令，因为我们已经有 `minio --help`。
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
@@ -199,30 +202,38 @@ var debugNoExit = env.Get("_MINIO_DEBUG_NO_EXIT", "") != ""
 
 // Main main for minio server.
 func Main(args []string) {
-	// Set the minio app name.
+	// 获取应用程序的名称，通常是可执行文件的名称。
 	appName := filepath.Base(args[0])
 
+	// 检查是否设置了调试模式下不退出的环境变量。
 	if debugNoExit {
+		// 定义一个冻结函数，用于阻止程序退出。
 		freeze := func(_ int) {
-			// Infinite blocking op
+			// 无限阻塞操作，防止程序退出。
 			<-make(chan struct{})
 		}
 
-		// Override the logger os.Exit()
+		// 覆盖 logger 的 os.Exit() 函数，使其调用冻结函数。
 		logger.ExitFunc = freeze
 
+		// 使用 defer 确保在函数退出前执行以下代码块。
 		defer func() {
+			// 捕获并处理 panic。
 			if err := recover(); err != nil {
+				// 打印 panic 信息。
 				fmt.Println("panic:", err)
 				fmt.Println("")
+				// 打印堆栈信息。
 				fmt.Println(string(debug.Stack()))
 			}
+			// 调用冻结函数，阻止程序退出。
 			freeze(-1)
 		}()
 	}
 
-	// Run the app - exit on error.
+	// 运行应用程序，如果发生错误则退出程序。
 	if err := newApp(appName).Run(args); err != nil {
+		// 退出程序，返回状态码 1。
 		os.Exit(1) //nolint:gocritic
 	}
 }
